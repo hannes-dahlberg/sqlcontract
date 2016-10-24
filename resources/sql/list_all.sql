@@ -1,0 +1,20 @@
+SELECT
+  CONCAT('[', [SPECIFIC_SCHEMA], '].[', [ROUTINE_NAME], ']') AS [name],
+  LOWER([ROUTINE_TYPE]) AS [type]
+FROM [INFORMATION_SCHEMA].[ROUTINES]
+UNION
+SELECT
+  CONCAT('[', [TABLE_SCHEMA], ']', '.', '[', [TABLE_NAME], ']') AS [name],
+  'table' AS [type]
+FROM [INFORMATION_SCHEMA].[TABLES]
+WHERE
+  [TABLE_TYPE] = 'BASE TABLE'
+UNION
+SELECT
+  CONCAT('[', [SCHEMA_NAME], ']') AS [name],
+  'schema' as [type]
+FROM [INFORMATION_SCHEMA].[SCHEMATA]
+WHERE
+  [SCHEMA_OWNER] = 'dbo'
+  AND [SCHEMA_NAME] != 'dbo'
+ORDER BY [type], [name]
