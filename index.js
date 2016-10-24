@@ -15,15 +15,24 @@ function SQL() { }
 
 SQL.prototype = {
     connection: false,
-    connect: function(connectionString) {
+    /**
+     * Creating a connection to an SQL database
+     * @param connectionProperties Can be connection string as well
+     */
+    connect: function(connectionProperties) {
         return new Promise((resolve, reject) => {
-            var connection = new sql.Connection(connectionString, (error) => {
+            var connection = new sql.Connection(connectionProperties, (error) => {
                 if(error) { reject(error); return; }
                 this.connection = connection;
                 resolve();
             });
         });
     },
+    /**
+     * Querying a connection with provided options
+     * @param query
+     * @param options
+     */
     query: function(query, options) {
         return new Promise((resolve, reject) => {
             //Set options to empty object if not defined
@@ -139,6 +148,14 @@ SQL.prototype = {
             var request = new sql.Request(connection);
             //Set to handel multiple record sets
             request.multiple = true;
+
+            if(typeof options.callback !='undefined') {
+                /*Callback with the complete query object (name and statement)
+                right before executing the query*/
+                query.status = 'executing';
+                options.callback(query);
+            }
+
             request.query(query.statement, (error, recordSets) => {
                 //Reject on SQL-error
                 if(error) {
@@ -149,12 +166,14 @@ SQL.prototype = {
                 }
 
                 if(typeof options.callback !='undefined') {
-                    //Callback with the complete query object (name and statement)
+                    /*Callback with the complete query object (name and statement)
+                    after execution is complete (without errors)*/
+                    query.status = 'complete'
                     options.callback(query);
                 }
 
-                /*If recordSet is empty: query executed but no record set could
-                 be fetch, resolve and end*/
+                /*If recordSet is empty (query executed but no record set could
+                 be fetch), resolve and end*/
                 if(typeof recordSets == 'undefined') {
                     resolve();
                     return;
@@ -170,6 +189,10 @@ SQL.prototype = {
             });
         })
     },
+    /**
+     * Get 
+     * @param options
+     */
     getDbObjectFiles: function(options) {
         return new Promise((resolve, reject) => {
             //Options must be provided. Reject if not
