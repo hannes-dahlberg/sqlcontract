@@ -79,6 +79,9 @@ SQL.prototype = {
                         });
                     });
                 });
+
+                //End method
+                return;
             }
 
             /*Get query data. Will return the query
