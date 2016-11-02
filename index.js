@@ -87,9 +87,50 @@ SQL.prototype = {
             /*Get query data. Will return the query
              in format: { name: {String}, statement: {String} }
              if the query was provided as a string. If the query
-             was already an object it will be untouched and if
-             it's an array it will return false*/
+             was already an object  or an array it will be untouched*/
             query = SQL.queryData(query);
+
+            /*Check if table is provided in query and if so, preform
+            a bulk using the current connection*/
+            if(Obj.getType(query.table) != undefined) {
+                //Creates a new request
+                var request = new sql.Request(connection);
+
+                if(typeof options.callback !='undefined') {
+                    /*Callback with the complete query object (name, statement and table)
+                     right before bulk insert*/
+                    query.status = 'bulk';
+                    options.callback(query);
+                }
+
+                //Bulk insert the table
+                request.bulk(query.table, (error) => {
+                    if(error) { reject(error); return; }
+
+                    if(typeof options.callback !='undefined') {
+                        /*Callback with the complete query object (name, statement and table)
+                         after bulk insert is complete (without errors)*/
+                        query.status = 'complete'
+                        options.callback(query);
+                    }
+
+                    /*Delete the query table object because it shouldn't be added again when
+                    executing the actual query*/
+                    delete query.table;
+
+                    /*Call itself with the same query as before (but now without the table)
+                    When executing the query the bulk inserted table will exists in the content
+                    of the query. This makes great for adding temporary tables prior of execution*/
+                    this.query(query, options).then((recordSets) => {
+                        resolve(recordSets);
+                    }).catch((error) => {
+                        reject(error);
+                    });
+                });
+
+                //End method
+                return;
+            }
 
             /*If batch option is set and the query is a string
              Use the batch option to separate query at each GO*/
@@ -193,7 +234,46 @@ SQL.prototype = {
         })
     },
     /**
-     * Get 
+     * Creating a new table object that can be used for bulk insert
+     *
+     * @param name - The table name, use # prefix for temp tables
+     * @param columns - Columns in the same format as return from query (with fetchArray = false)
+     * @param rows - Rows in the same forma as return from query
+     * @returns {Table}
+     */
+    createTable: function(name, columns, rows) {
+        var table = new sql.Table(name);
+        table.create = true;
+        //table.columns.add('a', sql.Int, {nullable: true, primary: true});
+        //table.columns.add('b', sql.VarChar(50), {nullable: false});
+        Object.keys(columns).forEach((index) => {
+            var options = {};
+            Object.keys(columns[index]).forEach((columnIndex) => {
+                if(['index', 'name', 'type', 'length'].indexOf(columnIndex) == -1) {
+                    options[columnIndex] = columns[index][columnIndex];
+                }
+            });
+
+            if(Obj.getType(columns[index].length != undefined)) {
+                var columnType = columns[index].type(columns[index].length);
+            } else {
+                var columnType = columns[index].type;
+            }
+            table.columns.add(columns[index].name, columnType, options);
+        });
+        rows.forEach((row) => {
+            var rowValues = [];
+            Object.keys(row).forEach((index) => {
+                rowValues.push(row[index]);
+            });
+
+            table.rows.add.apply(table.rows, rowValues);
+        });
+
+        return table;
+    },
+    /**
+     * Get dbo object files
      * @param options
      */
     getDbObjectFiles: function(options) {
