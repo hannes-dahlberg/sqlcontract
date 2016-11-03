@@ -24,7 +24,7 @@ SQL.prototype = {
             var connection = new sql.Connection(connectionProperties, (error) => {
                 if(error) { reject(error); return; }
                 this.connection = connection;
-                resolve();
+                resolve(connection);
             });
         });
     },
@@ -38,12 +38,17 @@ SQL.prototype = {
             //Set options to empty object if not defined
             if(typeof options == 'undefined') { options = {}; }
 
-            /*Rejects if no connection has been established
-             Make sure to run the connect method first*/
-            if(!this.connection) { reject(new Error('No connection was found')); }
-
             //Set to use the current connection
             var connection = this.connection;
+
+            //Connection can also be provided as an option
+            if(typeof options.connection != 'undefined' && Obj.getType(options.connection) == 'Connection') {
+                connection = options.connection;
+            }
+
+            /*Rejects if no connection has been established
+             Make sure to run the connect method first*/
+            if(!connection) { reject(new Error('No connection was found')); }
 
             //Look for transaction object in options
             if(typeof options.transaction != 'undefined' && Obj.getType(options.transaction) == 'Transaction') {
