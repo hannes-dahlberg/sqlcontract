@@ -38,12 +38,42 @@ SQL.prototype = {
             //Set options to empty object if not defined
             if(typeof options == 'undefined') { options = {}; }
 
+            /*Since the query method can be called multiple times with array of queries and other
+            whatnots each query is entitled to provide it's own set of options as well. This is useful
+            when you want to have the query result in different format for different queries or tie a
+            specific query to its own connection. The options parameter will be merged with (if exists)
+            the options parameter in the query object. The merge will only overwrite provided options
+            and leave all other options intact*/
+            if(typeof query.options != 'undefined') {
+                options = Obj.merge(options, query.options);
+                /*Clear out options from the query so they are not provided again if method is
+                calling itself before actually executing the query*/
+                query.options = {};
+            }
+
             //Set to use the current connection
             var connection = this.connection;
 
             //Connection can also be provided as an option
-            if(typeof options.connection != 'undefined' && Obj.getType(options.connection) == 'Connection') {
-                connection = options.connection;
+            if(typeof options.connection != 'undefined') {
+                if(Obj.getType(options.connection) == 'Connection') {
+                    //If the connection options is already an established connection, set to use it
+                    connection = options.connection;
+                } else if (['Object', 'String'].indexOf(Obj.getType(options.connection)) != -1) {
+                    /*The connection can also be config options or a connection string. If so establish
+                    a connection, update options object and call itself again*/
+                    this.connect(options.connection).then((connection) => {
+                        //Saving the connection to options
+                        options.connection = connection;
+                        //Calling itself again but now with an established connection
+                        this.query(query, options).then((recordSets) => {
+                            resolve(recordSets);
+                        }).catch((error) => reject(error));;
+                    }).catch((error) => reject(error));
+
+                    //End method
+                    return;
+                }
             }
 
             /*Rejects if no connection has been established
