@@ -312,10 +312,14 @@ SQL.prototype = {
                 }
             });
 
-            if(Obj.getType(columns[index].length != undefined)) {
-                var columnType = columns[index].type(columns[index].length);
+            if(Obj.getType(columns[index].type) == undefined) {
+                var columnType = sql.Float;
             } else {
-                var columnType = columns[index].type;
+                if(Obj.getType(columns[index].length != undefined)) {
+                    var columnType = columns[index].type(columns[index].length);
+                } else {
+                    var columnType = columns[index].type;
+                }
             }
             table.columns.add(columns[index].name, columnType, options);
         });
