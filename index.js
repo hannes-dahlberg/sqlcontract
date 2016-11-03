@@ -125,9 +125,16 @@ SQL.prototype = {
              was already an object  or an array it will be untouched*/
             query = SQL.queryData(query);
 
-            /*Check if table is provided in query and if so, preform
-            a bulk using the current connection*/
+            //If a single table is provided add it to the tables array
             if(Obj.getType(query.table) != undefined) {
+                query.tables = [query.table];
+
+                //Delete table from query
+                delete query.table;
+            }
+            /*Check if tables is provided in query and if so, preform
+            a bulk using the current connection*/
+            if(Obj.getType(query.tables) == 'Array') {
                 //Creates a new request
                 var request = new sql.Request(connection);
 
@@ -138,9 +145,25 @@ SQL.prototype = {
                     options.callback(query);
                 }
 
-                //Bulk insert the table
-                request.bulk(query.table, (error) => {
-                    if(error) { reject(error); return; }
+                //Holder for bulk promises
+                var subs = [];
+                query.tables.forEach((table) => {
+                    //Add each table to a bulk request wraped in a promise
+                    subs.push(() => {
+                        return new Promise((resolve, reject) => {
+                            request.bulk(table, (error) => {
+                                if(error) { reject(error); return; }
+
+                                resolve();
+                            });
+                        });
+                    });
+                });
+
+                //Execute all promises in sequence
+                Prom.sequence(subs).then((results) => {
+                    //Reject on any error
+                    if(results.some(_.isError)) { resolve(results.filter(_.isError)); return; }
 
                     if(typeof options.callback !='undefined') {
                         /*Callback with the complete query object (name, statement and table)
@@ -150,12 +173,12 @@ SQL.prototype = {
                     }
 
                     /*Delete the query table object because it shouldn't be added again when
-                    executing the actual query*/
-                    delete query.table;
+                     executing the actual query*/
+                    delete query.tables;
 
                     /*Call itself with the same query as before (but now without the table)
-                    When executing the query the bulk inserted table will exists in the content
-                    of the query. This makes great for adding temporary tables prior of execution*/
+                     When executing the query the bulk inserted table will exists in the content
+                     of the query. This makes great for adding temporary tables prior of execution*/
                     this.query(query, options).then((recordSets) => {
                         resolve(recordSets);
                     }).catch((error) => {
@@ -192,7 +215,7 @@ SQL.prototype = {
              the query batch method)*/
             if(Obj.getType(query) == 'Array') {
                 //Holder for all query promises
-                subs = [];
+                var subs = [];
                 query.forEach((query) => {
                     //Push promise of single query to subs
                     subs.push(() => {
