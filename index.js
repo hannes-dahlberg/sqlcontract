@@ -427,7 +427,7 @@ SQL.prototype = {
                 }
 
                 //Template query for deleting routine
-                var deleteRoutineQuery = fs.readFileSync('./resources/sql/delete_routine.sql', 'utf8');
+                var deleteRoutineQuery = fs.readFileSync(__dirname + '/resources/sql/delete_routine.sql', 'utf8');
 
                 //Holder for promises when collecting queries
                 subs = [];
@@ -437,7 +437,7 @@ SQL.prototype = {
                     subs.push(() => {
                         return new Promise((resolve, reject) => {
                             //Query for listing all db objects
-                            var query = fs.readFileSync('./resources/sql/list_all.sql', 'utf8');
+                            var query = fs.readFileSync(__dirname + '/resources/sql/list_all.sql', 'utf8');
                             this.query(query).then((recordSets) => {
                                 var dbObjects = recordSets[0];
                                 //Holder for delete queries
@@ -467,7 +467,7 @@ SQL.prototype = {
                 }
 
                 //Template query for creating schema
-                var schemaQuery = fs.readFileSync('./resources/sql/create_schema.sql', 'utf8');
+                var schemaQuery = fs.readFileSync(__dirname + '/resources/sql/create_schema.sql', 'utf8');
                 dbObjects.forEach((dbObject, index) => {
                     subs.push(() => {
                         return new Promise((resolve, reject) => {
@@ -573,7 +573,7 @@ SQL.prototype = {
             });
 
             //query to list all db objects in database
-            var query = fs.readFileSync('./resources/sql/list_all.sql', 'utf8');
+            var query = fs.readFileSync(__dirname + '/resources/sql/list_all.sql', 'utf8');
             this.query(query).then((recordSets) => {
                 //Create dbObjects from first recordSets result
                 var dbObjects = recordSets[0];
@@ -674,7 +674,7 @@ SQL.prototype = {
             //The procedure name to use for getDLL command
             var ddlProcedureName = 'GetDDL';
             //Set the query for checking if procedure exists or not
-            var query = Str.replace(['%DDL_PROCEDURE_NAME%', '%OBJECT_NAME%'], [ddlProcedureName, objectReference], fs.readFileSync('./resources/sql/get_ddl.sql', 'utf8'));
+            var query = Str.replace(['%DDL_PROCEDURE_NAME%', '%OBJECT_NAME%'], [ddlProcedureName, objectReference], fs.readFileSync(__dirname + '/resources/sql/get_ddl.sql', 'utf8'));
             this.query(query, options).then((recordSets) => {
                 //returnValue to use the first recordSet
                 var returnValue = recordSets[0][0];
@@ -689,7 +689,7 @@ SQL.prototype = {
                     } else {
                         /*No procedure exists. Lets create it. First by preparing
                          the query. Adding the procedure name*/
-                        var query = Str.replace(['%DDL_PROCEDURE_NAME%'], [ddlProcedureName], fs.readFileSync('./resources/sql/create_get_ddl.sql', 'utf8'));
+                        var query = Str.replace(['%DDL_PROCEDURE_NAME%'], [ddlProcedureName], fs.readFileSync(__dirname + '/resources/sql/create_get_ddl.sql', 'utf8'));
                         this.query(query, options).then(() => {
                             this.getDDL(objectReference, options, ++counter).then((ddl) => resolve(ddl)).catch((error) => reject(error));
                         }).catch((error) => reject(error));
@@ -704,7 +704,7 @@ SQL.prototype = {
     },
     getComment: function(name) {
         return new Promise((resolve, reject) => {
-            var query = Str.replace(['%COMMENT_NAME%'], [name], fs.readFileSync('./resources/sql/get_comment.sql', 'utf8'));
+            var query = Str.replace(['%COMMENT_NAME%'], [name], fs.readFileSync(__dirname + '/resources/sql/get_comment.sql', 'utf8'));
             this.query(query).then((recordSets) => {
                 var recordSet = recordSets[0];
                 if(typeof recordSet[0] != 'undefined' && typeof recordSet[0].value != 'undefined') {
@@ -717,7 +717,7 @@ SQL.prototype = {
     },
     setComment: function(name, value) {
         return new Promise((resolve, reject) => {
-            var query = Str.replace(['%COMMENT_NAME%', '%COMMENT_VALUE%'], [name, value], fs.readFileSync('./resources/sql/set_comment.sql', 'utf8'));
+            var query = Str.replace(['%COMMENT_NAME%', '%COMMENT_VALUE%'], [name, value], fs.readFileSync(__dirname + '/resources/sql/set_comment.sql', 'utf8'));
             this.query(query).then(() => {
                 resolve();
             }).catch((error) => reject(error));
