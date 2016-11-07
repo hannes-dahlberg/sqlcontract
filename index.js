@@ -521,6 +521,12 @@ SQL.prototype = {
 
                     var queries = results.filter((value) => typeof value != 'undefined');
 
+                    //Option for resolving all queries instead of executing them
+                    if(Obj.getType(options.export) != undefined && options.export) {
+                        resolve(queries);
+                        return;
+                    }
+
                     //Execute all resolved queries from sequence within a transaction
                     this.query(queries, {
                         transaction: true,
