@@ -148,7 +148,19 @@ SQL.prototype = {
                 //Holder for bulk promises
                 var subs = [];
                 query.tables.forEach((table) => {
-                    //Add each table to a bulk request wraped in a promise
+                    //If trying to create a temporary table
+                    if(Str.substr(table.name, 0, 1) == '#' && table.create) {
+                        subs.push(() => {
+                            return new Promise((resolve, reject) => {
+                                //Remove (if exists) the temporary table before creating it
+                                request.query('IF OBJECT_ID(\'tempdb..' + table.name + '\') IS NOT NULL BEGIN DROP TABLE ' + table.name + ' END', (error) => {
+                                    if(error) { reject(error); return; }
+                                    resolve();
+                                });
+                            });
+                        });
+                    }
+                    //Add each table to a bulk request wrapped in a promise
                     subs.push(() => {
                         return new Promise((resolve, reject) => {
                             request.bulk(table, (error) => {
@@ -302,8 +314,6 @@ SQL.prototype = {
     createTable: function(name, columns, rows) {
         var table = new sql.Table(name);
         table.create = true;
-        //table.columns.add('a', sql.Int, {nullable: true, primary: true});
-        //table.columns.add('b', sql.VarChar(50), {nullable: false});
         Object.keys(columns).forEach((index) => {
             var options = {};
             Object.keys(columns[index]).forEach((columnIndex) => {
