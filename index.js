@@ -55,7 +55,7 @@ SQL.prototype = {
             var connection = this.connection;
 
             //Connection can also be provided as an option
-            if(typeof options.connection != 'undefined') {
+            if(Obj.getType(options.connection) != undefined && options.connection !== false) {
                 if(Obj.getType(options.connection) == 'Connection') {
                     //If the connection options is already an established connection, set to use it
                     connection = options.connection;
@@ -68,7 +68,7 @@ SQL.prototype = {
                         //Calling itself again but now with an established connection
                         this.query(query, options).then((recordSets) => {
                             resolve(recordSets);
-                        }).catch((error) => reject(error));;
+                        }).catch((error) => reject(error));
                     }).catch((error) => reject(error));
 
                     //End method
@@ -270,6 +270,52 @@ SQL.prototype = {
                 options.callback(query);
             }
 
+            //Check if query result should be streamed or not
+            if(Obj.getType(options.stream) != undefined && options.stream && Obj.getType(options.streamCallback) == 'Function') { //Stream result
+                //Set stream for request
+                request.stream = true;
+
+                //Executing the query
+                request.query(query.statement);
+
+                //Invoke streamCallback function on each request callback
+                request.on('recordset', (columns) => {
+                    options.streamCallback('recordset', {
+                        columns: columns,
+                        query: query
+                    });
+                });
+
+                request.on('row', (row) => {
+                    options.streamCallback('row', {
+                        row: row,
+                        query: query
+                    });
+                });
+
+                //If an error occur reject
+                request.on('error', (error) => {
+                    reject(error);
+                });
+
+                //When the request is complete resolve
+                request.on('done', (returnValue, rowsAffected) => {
+                    //Make callback if callback option exists
+                    if(Obj.getType(options.callback) == 'Function') {
+                        query.status = 'complete'
+                        options.callback(query);
+                    }
+                    resolve({
+                        returnValue: returnValue,
+                        rowsAffected: rowsAffected
+                    });
+                });
+
+                //End method
+                return;
+            }
+
+            //No stream execute the query as usual
             request.query(query.statement, (error, recordSets) => {
                 //Reject on SQL-error
                 if(error) {
@@ -298,7 +344,8 @@ SQL.prototype = {
                     //Update each record set with associated values
                     recordSets.forEach((recordSet, index) => recordSets[index] = SQL.fetchArray(recordSet));
                 }
-
+                //Add queryobject to recordSets array
+                recordSets.forEach((recordSet, index) => recordSets[index].query = query);
                 resolve(recordSets);
             });
         })
@@ -705,151 +752,155 @@ SQL.prototype = {
             }).catch((error) => reject(error));
         });
     },
-    dump: function(table, options) {
+    dumpToTempTable: function(query, options) {
+        return new Promise((resolve, reject) => {
+            if(Obj.getType(options) == undefined) { options = {}; }
+
+            this.query(query, options).then((recordSets) => {
+                tableStatements = [];
+                recordSets.forEach((recordSet, index) => {
+                    if(Obj.getType(options.autoTableName) != undefined && options.autoTableName) {
+                        var tableName = '#temp_table' + (index + 1);
+                    } else {
+                        var tableName = recordSet.query.tableName;
+                    }
+                    var statement = 'SELECT * INTO ' + tableName + ' FROM (\n';
+                    recordSet.forEach((row) => {
+                        statement += 'SELECT ';
+                        Object.keys(row).forEach((column) => {
+                            if(typeof row[column] != 'string') {
+                                statement += row[column] + ' ';
+                            } else {
+                                //Replace any ' with '' for SQL escape
+                                statement += '\'' + row[column].replace(/'/g, '\'\'') + '\' ';
+                            }
+                            statement += ' AS ['+ column + '], ';
+                        });
+                        statement = Str.substr(statement, 0, -2) + '\nUNION\n';
+                    });
+                    statement = Str.substr(statement, 0, -6) + ') AS x';
+
+                    tableStatements.push(statement);
+                });
+
+                resolve(tableStatements);
+            }).catch((error) => reject(error));
+        });
+    },
+    dumpTable: function(table, options) {
         return new Promise((resolve, reject) => {
             if(Obj.getType(options) == undefined) { reject(new Error('Options parameter is missing')); return; }
 
             if(Obj.getType(options.callback) == undefined) { reject(new Error('Callback is missing from options')); return; }
-
-            //Set to use the current connection
-            var connection = this.connection;
-
-            //Connection can also be provided as an option
-            if(typeof options.connection != 'undefined') {
-                if(Obj.getType(options.connection) == 'Connection') {
-                    //If the connection options is already an established connection, set to use it
-                    connection = options.connection;
-                } else if (['Object', 'String'].indexOf(Obj.getType(options.connection)) != -1) {
-                    /*The connection can also be config options or a connection string. If so establish
-                     a connection, update options object and call itself again*/
-                    this.connect(options.connection).then((connection) => {
-                        //Saving the connection to options
-                        options.connection = connection;
-                        //Calling itself again but now with an established connection
-                        this.dump(table, options).then(() => {
-                            resolve();
-                        }).catch((error) => reject(error));
-                    }).catch((error) => reject(error));
-
-                    //End method
-                    return;
-                }
-            }
 
             var hasRows = false;
             var identityColumn = false;
             var identityColumnIndex = false;
 
             var query = Str.replace(['%TABLE_NAME%'], [table], fs.readFileSync(__dirname + '/resources/sql/get_identity_column.sql', 'utf8'));
-            this.query(query, { connection: 'mssql://tiego:Ky8P$Wqc@tga.database.windows.net/TGA_DEMO?encrypt=true' }).then((recordSets) => {
+            this.query(query, {
+                connection: (Obj.getType(options.connection != undefined) ? options.connection : this.connection)
+            }).then((recordSets) => {
                 if(recordSets[0].length == 1 && Obj.getType(recordSets[0][0].name) != undefined) {
                     identityColumn = recordSets[0][0].name;
+                }
 
-                    var request = new sql.Request(connection);
-                    request.stream = true;
-                    request.query('SELECT * FROM ' + table);
+                var insertStatement = '';
+                var rowCounter = 0;
 
-                    var insertStatement = '';
-                    var rowCounter = 0;
-
-                    request.on('recordset', (columns) => {
-                        var columnString = ' (';
-                        Object.keys(columns).forEach((column, index) => {
-                            if((Obj.getType(options.identityInsert) != undefined && options.identityInsert) || column != identityColumn) {
-                                columnString += '[' + column + '], ';
-                            } else if (column == identityColumn) {
-                                identityColumnIndex = index;
-                            }
-                        });
-
-                        columnString = Str.substr(columnString, 0, -2) + ')';
-
-                        //Should the table be truncated first or not
-                        if(Obj.getType(options.truncate) != undefined && options.truncate) {
-                            options.callback({
-                                statement: 'TRUNCATE TABLE ' + table + '\n',
-                                status: 'progress',
-                                info: 'truncate_table'
-                            });
-                        }
-
-                        //Should identity columns be fetch or not
-                        if(Obj.getType(options.identityInsert) && options.identityInsert && identityColumn !== false) {
-                            options.callback({
-                                statement: 'SET IDENTITY_INSERT ' + table + ' ON\n',
-                                status: 'progress',
-                                info: 'identity_insert_on'
-                            });
-                        }
-
-                        insertStatement = 'INSERT INTO ' + table + columnString;
-                        options.callback({
-                            statement: insertStatement,
-                            status: 'progress',
-                            info: 'insert_statement'
-                        });
-                    });
-
-                    request.on('row', (row) => {
-                        var rowString = '';
-                        if(!hasRows) {
-                            rowString += ' VALUES\n';
-                            hasRows = true;
-                        } else {
-                            rowString += ', \n';
-                        }
-                        rowString += '(';
-                        Object.keys(row).forEach((field, index) => {
-                            if(identityColumnIndex !== index) {
-                                if(typeof row[field] != 'string') {
-                                    rowString += row[field] + ', ';
-                                } else {
-                                    //Replace any ' with '' for SQL escape
-                                    rowString += '\'' + row[field].replace(/'/g, '\'\'') + '\', ';
+                this.query('SELECT * FROM ' + table, {
+                    connection: (Obj.getType(options.connection != undefined) ? options.connection : this.connection),
+                    stream: true,
+                    streamCallback: (type, data) => {
+                        if(type == 'recordset') {
+                            var columnString = ' (';
+                            Object.keys(data.columns).forEach((column, index) => {
+                                if((Obj.getType(options.identityInsert) != undefined && options.identityInsert) || column != identityColumn) {
+                                    columnString += '[' + column + '], ';
+                                } else if (column == identityColumn) {
+                                    identityColumnIndex = index;
                                 }
+                            });
+
+                            columnString = Str.substr(columnString, 0, -2) + ')';
+
+                            //Should the table be truncated first or not
+                            if(Obj.getType(options.truncate) != undefined && options.truncate) {
+                                options.callback({
+                                    statement: 'TRUNCATE TABLE ' + table + '\n',
+                                    status: 'progress',
+                                    info: 'truncate_table'
+                                });
                             }
-                        });
 
-                        rowString = '' + Str.substr(rowString, 0, - 2) + ')';
-                        options.callback({
-                            statement: rowString,
-                            status: 'progress',
-                            info: 'insert_value'
-                        });
+                            //Should identity columns be fetch or not
+                            if(Obj.getType(options.identityInsert) && options.identityInsert && identityColumn !== false) {
+                                options.callback({
+                                    statement: 'SET IDENTITY_INSERT ' + table + ' ON\n',
+                                    status: 'progress',
+                                    info: 'identity_insert_on'
+                                });
+                            }
 
-                        rowCounter++;
-
-                        if(rowCounter >= 1000) {
-                            rowCounter = 0;
-                            hasRows = false;
-
+                            insertStatement = 'INSERT INTO ' + table + columnString;
                             options.callback({
-                                statement: '\n' + insertStatement,
+                                statement: insertStatement,
                                 status: 'progress',
                                 info: 'insert_statement'
                             });
-                        }
-                    });
 
-                    request.on('error', (error) => reject(error));
-
-                    request.on('done', () => {
-                        if(Obj.getType(options.identityInsert) && options.identityInsert && identityColumn !== false) {
-                            options.callback({
-                                statement: '\nSET IDENTITY_INSERT ' + table + ' OFF\n',
-                                status: 'progress',
-                                info: 'identity_insert_off'
+                        } else if(type == 'row') {
+                            var rowString = '';
+                            if(!hasRows) {
+                                rowString += ' VALUES\n';
+                                hasRows = true;
+                            } else {
+                                rowString += ', \n';
+                            }
+                            rowString += '(';
+                            Object.keys(data.row).forEach((field, index) => {
+                                if(identityColumnIndex !== index) {
+                                    if(typeof data.row[field] != 'string') {
+                                        rowString += data.row[field] + ', ';
+                                    } else {
+                                        //Replace any ' with '' for SQL escape
+                                        rowString += '\'' + data.row[field].replace(/'/g, '\'\'') + '\', ';
+                                    }
+                                }
                             });
+
+                            rowString = '' + Str.substr(rowString, 0, - 2) + ')';
+                            options.callback({
+                                statement: rowString,
+                                status: 'progress',
+                                info: 'insert_value'
+                            });
+
+                            rowCounter++;
+
+                            if(rowCounter >= 1000) {
+                                rowCounter = 0;
+                                hasRows = false;
+
+                                options.callback({
+                                    statement: '\n' + insertStatement,
+                                    status: 'progress',
+                                    info: 'insert_statement'
+                                });
+                            }
                         }
-
+                    }
+                }).then(() => {
+                    if(Obj.getType(options.identityInsert) && options.identityInsert && identityColumn !== false) {
                         options.callback({
-                            status: 'done',
-                            info: 'done'
+                            statement: '\nSET IDENTITY_INSERT ' + table + ' OFF\n',
+                            status: 'progress',
+                            info: 'identity_insert_off'
                         });
+                    }
 
-                        resolve();
-                    })
-                }
+                    resolve();
+                }).catch((error) => reject(error));
             }).catch((error) => reject(error));
         });
     },
