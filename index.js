@@ -907,6 +907,11 @@ SQL.prototype = {
     getComment: function(name, options) {
         return new Promise((resolve, reject) => {
             var query = Str.replace(['%COMMENT_NAME%'], [name], fs.readFileSync(__dirname + '/resources/sql/get_comment.sql', 'utf8'));
+            if(Obj.getType(options.export) != undefined && options.export) {
+                resolve(query);
+                return;
+            }
+
             this.query(query, options).then((recordSets) => {
                 var recordSet = recordSets[0];
                 if(typeof recordSet[0] != 'undefined' && typeof recordSet[0].value != 'undefined') {
@@ -920,6 +925,11 @@ SQL.prototype = {
     setComment: function(name, value, options) {
         return new Promise((resolve, reject) => {
             var query = Str.replace(['%COMMENT_NAME%', '%COMMENT_VALUE%'], [name, value], fs.readFileSync(__dirname + '/resources/sql/set_comment.sql', 'utf8'));
+            if(Obj.getType(options.export) != undefined && options.export) {
+                resolve(query);
+                return;
+            }
+
             this.query(query, options).then(() => {
                 resolve();
             }).catch((error) => reject(error));
