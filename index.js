@@ -904,10 +904,10 @@ SQL.prototype = {
             }).catch((error) => reject(error));
         });
     },
-    getComment: function(name) {
+    getComment: function(name, options) {
         return new Promise((resolve, reject) => {
             var query = Str.replace(['%COMMENT_NAME%'], [name], fs.readFileSync(__dirname + '/resources/sql/get_comment.sql', 'utf8'));
-            this.query(query).then((recordSets) => {
+            this.query(query, options).then((recordSets) => {
                 var recordSet = recordSets[0];
                 if(typeof recordSet[0] != 'undefined' && typeof recordSet[0].value != 'undefined') {
                     resolve(recordSet[0].value);
@@ -917,10 +917,10 @@ SQL.prototype = {
             }).catch((error) => reject(error));
         });
     },
-    setComment: function(name, value) {
+    setComment: function(name, value, options) {
         return new Promise((resolve, reject) => {
             var query = Str.replace(['%COMMENT_NAME%', '%COMMENT_VALUE%'], [name, value], fs.readFileSync(__dirname + '/resources/sql/set_comment.sql', 'utf8'));
-            this.query(query).then(() => {
+            this.query(query, options).then(() => {
                 resolve();
             }).catch((error) => reject(error));
         });
