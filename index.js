@@ -122,7 +122,7 @@ SQL.prototype = {
             /*Get query data. Will return the query
              in format: { name: {String}, statement: {String} }
              if the query was provided as a string. If the query
-             was already an object  or an array it will be untouched*/
+             was already an object or an array it will be untouched*/
             query = SQL.queryData(query);
 
             //If a single table is provided add it to the tables array
@@ -225,10 +225,14 @@ SQL.prototype = {
 
             /*If array of queries are provided (or the query was split with
              the query batch method)*/
-            if(Obj.getType(query) == 'Array') {
+            if(Obj.getType(query) == 'Array' || Obj.getType(query.queries) == 'Array') {
                 //Holder for all query promises
                 var subs = [];
-                query.forEach((query) => {
+                var queries = query;
+                if(Obj.getType(query.queries) == 'Array') {
+                    queries = query.queries;
+                }
+                queries.forEach((query) => {
                     //Push promise of single query to subs
                     subs.push(() => {
                         return new Promise((resolve, reject) => {
@@ -243,12 +247,19 @@ SQL.prototype = {
                 Prom.sequence(subs).then((recordSets) => {
                     //Reject if any of them has an error
                     if(recordSets.some(_.isError)) {
-                        //Reject with first erro
+                        //Reject with first error
                         reject(recordSets.filter(_.isError)[0]);
                         return;
                     }
 
-                    //resolve
+
+                    /*If multiple queries were provided as property and a callback property was provided
+                    as well, the callback will be called when all queries has been executed*/
+                    if(Obj.getType(query.queries) == 'Array' && Obj.getType(query.callback) == 'Function') {
+                        query.callback(query);
+                    }
+
+                    //flatten result and resolve
                     var level = 1;
                     if(typeof options.fetchArray != 'undefined') { level = 0; }
                     resolve(Arr.flatten(recordSets, level));
