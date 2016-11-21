@@ -923,6 +923,8 @@ SQL.prototype = {
         });
     },
     getComment: function(name, options) {
+        if(Obj.getType(options) == undefined) { options = {}; }
+
         return new Promise((resolve, reject) => {
             var query = Str.replace(['%COMMENT_NAME%'], [name], fs.readFileSync(__dirname + '/resources/sql/get_comment.sql', 'utf8'));
             if(Obj.getType(options.export) != undefined && options.export) {
@@ -941,6 +943,8 @@ SQL.prototype = {
         });
     },
     setComment: function(name, value, options) {
+        if(Obj.getType(options) == undefined) { options = {}; }
+
         //If value is false, empty or undefined call to delete comment instead
         if(!value || value == '' || Obj.getType(value) == undefined) {
             return this.deleteComment(name, options);
@@ -959,6 +963,8 @@ SQL.prototype = {
         });
     },
     deleteComment: function(name, options) {
+        if(Obj.getType(options) == undefined) { options = {}; }
+
         return new Promise((resolve, reject) => {
             var query = Str.replace(['%COMMENT_NAME%'], [name], fs.readFileSync(__dirname + '/resources/sql/delete_comment.sql', 'utf8'));
             if(Obj.getType(options.export) != undefined && options.export) {
