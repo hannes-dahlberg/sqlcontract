@@ -941,8 +941,26 @@ SQL.prototype = {
         });
     },
     setComment: function(name, value, options) {
+        //If value is false, empty or undefined call to delete comment instead
+        if(!value || value == '' || Obj.getType(value) == undefined) {
+            return this.deleteComment(name, options);
+        }
+
         return new Promise((resolve, reject) => {
             var query = Str.replace(['%COMMENT_NAME%', '%COMMENT_VALUE%'], [name, value], fs.readFileSync(__dirname + '/resources/sql/set_comment.sql', 'utf8'));
+            if(Obj.getType(options.export) != undefined && options.export) {
+                resolve(query);
+                return;
+            }
+
+            this.query(query, options).then(() => {
+                resolve();
+            }).catch((error) => reject(error));
+        });
+    },
+    deleteComment: function(name, options) {
+        return new Promise((resolve, reject) => {
+            var query = Str.replace(['%COMMENT_NAME%'], [name], fs.readFileSync(__dirname + '/resources/sql/delete_comment.sql', 'utf8'));
             if(Obj.getType(options.export) != undefined && options.export) {
                 resolve(query);
                 return;
