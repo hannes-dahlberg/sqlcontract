@@ -243,6 +243,12 @@ SQL.prototype = {
                     });
                 });
 
+                //Multiple queries and callback
+                if(Obj.getType(query.queries) == 'Array' && Obj.getType(query.callback) == 'Function') {
+                    query.status = 'executing';
+                    query.callback(query);
+                }
+
                 //Execute all query promises in sequence
                 Prom.sequence(subs).then((recordSets) => {
                     //Reject if any of them has an error
@@ -256,6 +262,7 @@ SQL.prototype = {
                     /*If multiple queries were provided as property and a callback property was provided
                     as well, the callback will be called when all queries has been executed*/
                     if(Obj.getType(query.queries) == 'Array' && Obj.getType(query.callback) == 'Function') {
+                        query.status = 'complete';
                         query.callback(query);
                     }
 
