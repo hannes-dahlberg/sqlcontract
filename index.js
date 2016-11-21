@@ -970,6 +970,46 @@ SQL.prototype = {
                 resolve();
             }).catch((error) => reject(error));
         });
+    },
+    getComments: function(comments, options) {
+        return new Promise((resolve, reject) => {
+            var subs = [];
+            comments.forEach((comment) => {
+                subs.push(() => {
+                    return new Promise((resolve, reject) => {
+                        this.getComment(comment, options).then((value) => {
+                            resolve({ comment: value });
+                        }).catch((error) => reject(error));
+                    });
+                });
+            });
+
+            Prom.sequence(subs).then((results) => {
+                if(results.some(_.isError)) { reject(results.filter(_.isError)); return; }
+
+                resolve(results);
+            });
+        });
+    },
+    setComments: function(comments, options) {
+        return new Promise((resolve, reject) => {
+            var subs = [];
+            Object.keys(comments).forEach((comment) => {
+                subs.push(() => {
+                    return new Promise((resolve, reject) => {
+                        this.setComment(comment, comments[comment], options).then(() => {
+                            resolve();
+                        }).catch((error) => reject(error));
+                    });
+                });
+            });
+
+            Prom.sequence(subs).then((results) => {
+                if(results.some(_.isError)) { reject(results.filter(_.isError)); return; }
+
+                resolve();
+            });
+        });
     }
 }
 
