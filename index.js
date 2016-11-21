@@ -501,7 +501,7 @@ SQL.prototype = {
                 subs = [];
 
                 //Options for clearing out all functions and procedures before importing
-                if(typeof options.empty != 'undefined') {
+                if(Obj.getType(options.clean) != undefined && options.clean) {
                     subs.push(() => {
                         return new Promise((resolve, reject) => {
                             //Query for listing all db objects
@@ -564,7 +564,7 @@ SQL.prototype = {
 
                                     /*If not all objects just has been deleted each
                                      db routine need to be deleted before being created*/
-                                    if(typeof options.empty == 'undefined') {
+                                    if(Obj.getType(options.clean) == undefined || !options.clean) {
                                         resolve([{
                                             info: 'delete_object',
                                             dbObject: dbObject,
@@ -582,7 +582,43 @@ SQL.prototype = {
                         });
                     });
                 });
+
+                //Option for deleting any dbObject not uploaded
+                if(Obj.getType(options.empty) != undefined && options.empty) {
+                     subs.push(() => {
+                         return new Promise((resolve, reject) => {
+                             //Query for listing all db objects
+                             var query = fs.readFileSync(__dirname + '/resources/sql/list_all.sql', 'utf8');
+                             this.query(query).then((recordSets) => {
+                                 var subDbObjects = recordSets[0];
+                                 //Holder for delete queries
+                                 var queries = [];
+                                 //Filter out only procedures and functions not uploaded
+                                 subDbObjects = subDbObjects.filter((item) => ['procedure', 'function'].indexOf(item.type) >= 0 && dbObjects.indexOf((dbObject) => dbObject.name == item.name) == -1);
+                                 //Query for deleting routine
+                                 dbObjects.forEach((dbObject) => {
+                                     //Add delete query for each procedure and function
+                                     queries.push({
+                                         info: 'delete_object',
+                                         dbObject: dbObject,
+                                         statement: Str.replace(['%ROUTINE%', '%TYPE%'], [dbObject.name, dbObject.type.toUpperCase()], deleteRoutineQuery)
+                                     });
+                                 });
+
+                                 //Resolve with all queries
+                                 if(queries.length > 0) {
+                                     resolve(queries);
+                                     return;
+                                 }
+
+                                 resolve();
+                             }).catch((error) => reject(error));
+                         });
+                     });
+                }
+
                 //Execute promises for getting all queries
+
                 Prom.sequence(subs).then((results) => {
                     //Reject on any error
                     if(results.some(_.isError)) { reject(results.filter(_.isError)); return; }
@@ -604,9 +640,12 @@ SQL.prototype = {
                             }
                         }
                     }).then(() => {
-                        if(typeof options.callback != 'undefined') { options.callback({
-                            info: 'done'
-                        }); }
+                        if(typeof options.callback != 'undefined') {
+                            options.callback({
+                                info: 'done'
+                            });
+                        }
+                        resolve();
                     }).catch((error) => reject(error));
                 });
 
