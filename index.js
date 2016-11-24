@@ -813,34 +813,95 @@ SQL.prototype = {
         return new Promise((resolve, reject) => {
             if(Obj.getType(options) == undefined) { options = {}; }
 
-            this.query(query, options).then((recordSets) => {
-                tableStatements = [];
-                recordSets.forEach((recordSet, index) => {
-                    if(Obj.getType(options.autoTableName) != undefined && options.autoTableName) {
-                        var tableName = '#temp_table' + (index + 1);
-                    } else {
-                        var tableName = recordSet.query.tableName;
-                    }
-                    var statement = 'SELECT * INTO ' + tableName + ' FROM (\n';
-                    recordSet.forEach((row) => {
-                        statement += 'SELECT ';
-                        Object.keys(row).forEach((column) => {
-                            if(typeof row[column] != 'string') {
-                                statement += row[column] + ' ';
+            if(Obj.getType(options.stream) != undefined && options.stream && Obj.getType(options.streamCallback) == undefined) { reject(new Error('Stream callback is missing from options')); return; }
+
+            var endStatement = ') AS x';
+
+            var outputStatement = '';
+            var recordSetCounter = 0;
+            var rowCounter = 0;
+            this.query(query, Obj.merge(options, {
+                stream: true,
+                streamCallback: (type, data) => {
+                    var statement = '';
+                    if(type == 'recordset') {
+                        rowCounter = 0;
+                        if(recordSetCounter > 0) {
+                            if(Obj.getType(options.stream) != undefined && options.stream) {
+                                options.streamCallback({
+                                    status: 'recordset_end',
+                                    statement: endStatement + '\n'
+                                });
+                            } else {
+                                outputStatement += endStatement + '\n';
+                            }
+                        }
+                        if(Obj.getType(options.autoTableName) != undefined && options.autoTableName) {
+                            var tableName = '#temp_table' + (recordSetCounter + 1);
+                        } else {
+                            var tableName = data.query.tableName;
+                        }
+
+                        statement = 'SELECT * INTO ' + tableName + ' FROM (\n';
+
+                        if(Obj.getType(options.stream) != undefined && options.stream) {
+                            options.streamCallback({
+                                status: 'recordset',
+                                statement: statement
+                            });
+                        }
+
+                        recordSetCounter++;
+                    } else if(type == 'row') {
+                        var tempStatement = '';
+                        if(rowCounter > 0) {
+                            tempStatement = 'UNION\n';
+                        }
+
+                        tempStatement += 'SELECT ';
+                        Object.keys(data.row).forEach((column) => {
+                            if(typeof data.row[column] != 'string') {
+                                tempStatement += data.row[column] + ' ';
                             } else {
                                 //Replace any ' with '' for SQL escape
-                                statement += '\'' + row[column].replace(/'/g, '\'\'') + '\' ';
+                                tempStatement += '\'' + data.row[column].replace(/'/g, '\'\'') + '\' ';
                             }
-                            statement += ' AS ['+ column + '], ';
+                            tempStatement += ' AS ['+ column + '], ';
                         });
-                        statement = Str.substr(statement, 0, -2) + '\nUNION\n';
-                    });
-                    statement = Str.substr(statement, 0, -6) + ') AS x';
+                        tempStatement = Str.substr(tempStatement, 0, -2) + '\n';
 
-                    tableStatements.push(statement);
-                });
+                        if(Obj.getType(options.stream) != undefined && options.stream) {
+                            options.streamCallback({
+                                status: 'row',
+                                statement: tempStatement
+                            });
+                        } else {
+                            statement = tempStatement;
+                        }
 
-                resolve(tableStatements);
+
+                        rowCounter++;
+                    }
+
+                    outputStatement += statement;
+                }
+            })).then(() => {
+                if(recordSetCounter > 0) {
+                    if(Obj.getType(options.stream) != undefined && options.stream) {
+                        options.streamCallback({
+                            status: 'recordset_end',
+                            statement: endStatement
+                        });
+                    } else {
+                        outputStatement += endStatement;
+                    }
+                }
+
+                if(Obj.getType(options.stream) != undefined && options.stream) {
+                    resolve();
+                } else {
+                    resolve(outputStatement);
+                }
             }).catch((error) => reject(error));
         });
     },
