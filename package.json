@@ -22,6 +22,7 @@
     "lodash": "^4.16.4",
     "mkdirp": "^0.5.1",
     "mssql": "^3.3.0",
+    "nodehelpers": "git+https://github.com/hannes-dahlberg/nodehelpers.git",
     "thenby": "^1.2.1"
   }
 }

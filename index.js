@@ -5,10 +5,11 @@ var Promise = require('bluebird');
 var _ = require('lodash');
 var firstBy = require('thenby');
 
-var Prom = require('./helpers/Prom');
-var Arr = require('./helpers/Arr');
-var Obj = require('./helpers/Obj');
-var Str = require('./helpers/Str');
+var NodeHelpers = require('nodehelpers');
+var Prom = NodeHelpers.prom;
+var Arr = NodeHelpers.arr;
+var Obj = NodeHelpers.obj
+var Str = NodeHelpers.str;
 
 //Constructor
 function SQL() { }
